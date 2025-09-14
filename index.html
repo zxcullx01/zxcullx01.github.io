@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GitHub仓库操作工具（最终版）</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#2eaadc',
+                        secondary: '#171515',
+                        neutral: '#f0f6fc',
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .file-item:hover {
+                background-color: #f0f6fc;
+            }
+            .path-breadcrumb {
+                font-size: 0.85rem;
+                color: #6b7280;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div class="container mx-auto px-4 py-8 max-w-5xl">
+        <header class="mb-10 text-center">
+            <h1 class="text-[clamp(1.8rem,5vw,2.5rem)] font-bold text-gray-800 mb-2">
+                <i class="fa fa-github text-gray-700 mr-3"></i>GitHub仓库操作工具
+            </h1>
+            <p class="text-gray-600">已修复响应解析错误</p>
+        </header>
+
+        <!-- 配置区域 -->
+        <div class="bg-white rounded-lg shadow-md p-6 mb-8">
+            <h2 class="text-xl font-semibold mb-4 text-gray-800 flex items-center">
+                <i class="fa fa-cog text-primary mr-2"></i>配置信息
+            </h2>
+            <div class="space-y-4">
+                <div>
+                    <label for="githubToken" class="block text-sm font-medium text-gray-700 mb-1">GitHub Token</label>
+                    <input type="password" id="githubToken" 
+                        class="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-primary focus:border-primary transition"
+                        placeholder="输入你的GitHub访问令牌" required>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="owner" class="block text-sm font-medium text-gray-700 mb-1">仓库所有者(Username)</label>
+                        <input type="text" id="owner" 
+                            class="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-primary focus:border-primary transition"
+                            placeholder="例如: octocat" required>
+                    </div>
+                    <div>
+                        <label for="repo" class="block text-sm font-medium text-gray-700 mb-1">仓库名称</label>
+                        <input type="text" id="repo" 
+                            class="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-primary focus:border-primary transition"
+                            placeholder="例如: hello-world" required>
+                    </div>
+                </div>
+                <button id="testConnection" class="bg-primary hover:bg-primary/90 text-white px-4 py-2 rounded-md transition flex items-center">
+                    <i class="fa fa-check-circle mr-2"></i>测试连接
+                </button>
+            </div>
+            <div id="connectionStatus" class="mt-4 hidden"></div>
+        </div>
+
+        <!-- 当前路径导航 -->
+        <div class="bg-white rounded-lg shadow-md p-4 mb-6">
+            <div class="path-breadcrumb flex items-center flex-wrap gap-2">
+                <span id="currentPathDisplay">当前路径: /</span>
+                <button id="goToParent" class="text-primary hover:underline text-sm hidden">
+                    <i class="fa fa-level-up mr-1"></i>返回上一级
+                </button>
+            </div>
+        </div>
+
+        <!-- 文件列表区域 -->
+        <div class="bg-white rounded-lg shadow-md p-6 mb-8">
+            <h3 class="text-lg font-semibold mb-4 text-gray-800 flex items-center">
+                <i class="fa fa-folder-open text-primary mr-2"></i>文件列表
+                <button id="refreshFiles" class="ml-4 text-gray-600 hover:text-primary text-sm">
+                    <i class="fa fa-refresh"></i> 刷新
+                </button>
+            </h3>
+            <div id="fileList" class="border rounded-md max-h-[400px] overflow-y-auto">
+                <div class="p-4 text-gray-500 text-center">请点击"获取文件列表"按钮加载内容</div>
+            </div>
+            <div class="mt-4 flex justify-center">
+                <button id="listFiles" class="bg-gray-800 hover:bg-gray-700 text-white px-4 py-2 rounded-md transition flex items-center">
+                    <i class="fa fa-list mr-2"></i>获取文件列表
+                </button>
+            </div>
+        </div>
+
+        <!-- 操作区域 -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+            <!-- 读取文件内容 -->
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <h3 class="text-lg font-semibold mb-3 text-gray-800 flex items-center">
+                    <i class="fa fa-file-text text-primary mr-2"></i>读取文件
+                </h3>
+                <div class="mb-3">
+                    <label for="readFilePath" class="block text-sm font-medium text-gray-700 mb-1">文件路径</label>
+                    <input type="text" id="readFilePath" 
+                        class="w-full px-3 py-1.5 border border-gray-300 rounded-md text-sm"
+                        placeholder="例如: docs/README.md">
+                </div>
+                <button id="readFile" class="w-full bg-gray-800 hover:bg-gray-700 text-white px-3 py-2 rounded-md text-sm transition">
+                    读取内容
+                </button>
+            </div>
+
+            <!-- 写入文件内容 -->
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <h3 class="text-lg font-semibold mb-3 text-gray-800 flex items-center">
+                    <i class="fa fa-pencil text-primary mr-2"></i>写入文件
+                </h3>
+                <div class="mb-3">
+                    <label for="writeFilePath" class="block text-sm font-medium text-gray-700 mb-1">文件路径</label>
+                    <input type="text" id="writeFilePath" 
+                        class="w-full px-3 py-1.5 border border-gray-300 rounded-md text-sm"
+                        placeholder="例如: test.txt">
+                </div>
+                <button id="writeFile" class="w-full bg-gray-800 hover:bg-gray-700 text-white px-3 py-2 rounded-md text-sm transition">
+                    保存文件
+                </button>
+            </div>
+        </div>
+
+        <!-- 内容编辑区域 -->
+        <div class="bg-white rounded-lg shadow-md p-6 mb-8">
+            <h3 class="text-lg font-semibold mb-3 text-gray-800 flex items-center">
+                <i class="fa fa-edit text-primary mr-2"></i>文件内容
+            </h3>
+            <textarea id="fileContent" rows="10" 
+                class="w-full px-4 py-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-primary focus:border-primary transition font-mono text-sm"
+                placeholder="文件内容将显示在这里..."></textarea>
+        </div>
+
+        <!-- 结果区域 -->
+        <div class="bg-white rounded-lg shadow-md p-6">
+            <h3 class="text-lg font-semibold mb-3 text-gray-800 flex items-center">
+                <i class="fa fa-info-circle text-primary mr-2"></i>操作结果
+            </h3>
+            <div id="result" class="p-4 bg-gray-50 rounded-md min-h-[100px] text-gray-700 font-mono text-sm overflow-auto"></div>
+        </div>
+    </div>
+
+    <script>
+        // 全局变量存储当前路径
+        let currentPath = '';
+        let fullPath = '';
+
+        // DOM元素
+        const githubTokenInput = document.getElementById('githubToken');
+        const ownerInput = document.getElementById('owner');
+        const repoInput = document.getElementById('repo');
+        const testConnectionBtn = document.getElementById('testConnection');
+        const connectionStatus = document.getElementById('connectionStatus');
+        const listFilesBtn = document.getElementById('listFiles');
+        const refreshFilesBtn = document.getElementById('refreshFiles');
+        const currentPathDisplay = document.getElementById('currentPathDisplay');
+        const goToParentBtn = document.getElementById('goToParent');
+        const fileList = document.getElementById('fileList');
+        const readFilePathInput = document.getElementById('readFilePath');
+        const readFileBtn = document.getElementById('readFile');
+        const writeFilePathInput = document.getElementById('writeFilePath');
+        const writeFileBtn = document.getElementById('writeFile');
+        const fileContentTextarea = document.getElementById('fileContent');
+        const resultDiv = document.getElementById('result');
+
+        // 显示结果
+        function showResult(content, isError = false) {
+            resultDiv.innerHTML = content;
+            resultDiv.className = isError 
+                ? 'p-4 bg-red-50 text-red-700 rounded-md min-h-[100px] font-mono text-sm overflow-auto'
+                : 'p-4 bg-gray-50 rounded-md min-h-[100px] font-mono text-sm overflow-auto';
+        }
+
+        // 显示状态消息
+        function showStatus(message, isError = false) {
+            connectionStatus.textContent = message;
+            connectionStatus.className = isError 
+                ? 'mt-4 text-red-600 p-2 bg-red-50 rounded-md'
+                : 'mt-4 text-green-600 p-2 bg-green-50 rounded-md';
+            connectionStatus.classList.remove('hidden');
+            
+            // 3秒后隐藏状态
+            setTimeout(() => {
+                connectionStatus.classList.add('hidden');
+            }, 3000);
+        }
+
+        // 验证配置
+        function validateConfig() {
+            const token = githubTokenInput.value.trim();
+            const owner = ownerInput.value.trim();
+            const repo = repoInput.value.trim();
+            
+            if (!token || !owner || !repo) {
+                showResult('请填写完整的配置信息', true);
+                return false;
+            }
+            return { token, owner, repo };
+        }
+
+        // 清理路径（移除开头的斜杠）
+        function cleanPath(path) {
+            // 移除开头的斜杠
+            if (path.startsWith('/')) {
+                path = path.substring(1);
+            }
+            // 移除多余的斜杠
+            return path.replace(/\/+/g, '/');
+        }
+
+        // 更新当前路径显示
+        function updatePathDisplay() {
+            const displayPath = fullPath ? `/${fullPath}` : '/';
+            currentPathDisplay.textContent = `当前路径: ${displayPath}`;
+            
+            // 显示/隐藏返回上一级按钮
+            if (fullPath) {
+                goToParentBtn.classList.remove('hidden');
+            } else {
+                goToParentBtn.classList.add('hidden');
+            }
+        }
+
+        // 导航到父目录
+        goToParentBtn.addEventListener('click', () => {
+            if (!fullPath) return;
+            
+            const pathParts = fullPath.split('/').filter(part => part);
+            pathParts.pop(); // 移除最后一部分
+            fullPath = pathParts.join('/');
+            currentPath = fullPath ? `${fullPath}/` : '';
+            
+            updatePathDisplay();
+            loadFileList(); // 加载父目录内容
+        });
+
+        // 测试连接
+        testConnectionBtn.addEventListener('click', async () => {
+            const config = validateConfig();
+            if (!config) return;
+
+            try {
+                const response = await fetch(
+                    `https://api.github.com/repos/${config.owner}/${config.repo}`,
+                    {
+                        headers: {
+                            'Authorization': `token ${config.token}`,
+                            'Accept': 'application/vnd.github.v3+json'
+                        }
+                    }
+                );
+
+                if (response.ok) {
+                    const data = await response.json();
+                    showStatus(`连接成功！仓库: ${data.full_name}`);
+                    showResult(`仓库信息:
+名称: ${data.name}
+所有者: ${data.owner.login}
+描述: ${data.description || '无'}
+创建时间: ${new Date(data.created_at).toLocaleString()}`);
+                } else {
+                    const error = await response.json();
+                    showStatus(`连接失败: ${error.message}`, true);
+                    showResult(`错误: ${JSON.stringify(error, null, 2)}`, true);
+                }
+            } catch (error) {
+                showStatus('网络错误，无法连接到GitHub', true);
+                showResult(`错误: ${error.message}`, true);
+            }
+        });
+
+        // 加载文件列表
+        async function loadFileList() {
+            const config = validateConfig();
+            if (!config) return;
+
+            try {
+                // 显示加载状态
+                fileList.innerHTML = '<div class="p-4 text-gray-500 text-center"><i class="fa fa-spinner fa-spin mr-2"></i>加载中...</div>';
+                
+                // 清理路径，确保不以斜杠开头
+                const cleanedPath = cleanPath(currentPath);
+                
+                const response = await fetch(
+                    `https://api.github.com/repos/${config.owner}/${config.repo}/contents/${cleanedPath}`,
+                    {
+                        headers: {
+                            'Authorization': `token ${config.token}`,
+                            'Accept': 'application/vnd.github.v3+json'
+                        }
+                    }
+                );
+
+                if (response.ok) {
+                    const files = await response.json();
+                    
+                    if (Array.isArray(files) && files.length > 0) {
+                        // 分离目录和文件，目录在前
+                        const dirs = files.filter(item => item.type === 'dir');
+                        const filesList = files.filter(item => item.type === 'file');
+                        
+                        let html = '<table class="min-w-full divide-y divide-gray-200">';
+                        // 添加目录
+                        dirs.forEach(dir => {
+                            const dirFullPath = fullPath ? `${fullPath}/${dir.name}` : dir.name;
+                            html += `
+                            <tr class="file-item cursor-pointer hover:bg-gray-50 transition">
+                                <td class="px-4 py-3 whitespace-nowrap">
+                                    <div class="flex items-center">
+                                        <i class="fa fa-folder text-yellow-500 mr-3"></i>
+                                        <span>${dir.name}</span>
+                                    </div>
+                                </td>
+                                <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                                    目录
+                                </td>
+                                <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500 truncate max-w-xs">
+                                    ${dirFullPath}
+                                </td>
+                            </tr>`;
+                        });
+                        
+                        // 添加文件
+                        filesList.forEach(file => {
+                            const fileFullPath = fullPath ? `${fullPath}/${file.name}` : file.name;
+                            html += `
+                            <tr class="file-item cursor-pointer hover:bg-gray-50 transition">
+                                <td class="px-4 py-3 whitespace-nowrap">
+                                    <div class="flex items-center">
+                                        <i class="fa fa-file text-gray-400 mr-3"></i>
+                                        <span>${file.name}</span>
+                                    </div>
+                                </td>
+                                <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                                    ${formatFileSize(file.size)}
+                                </td>
+                                <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500 truncate max-w-xs">
+                                    ${fileFullPath}
+                                </td>
+                            </tr>`;
+                        });
+                        
+                        html += '</table>';
+                        fileList.innerHTML = html;
+                        
+                        // 为目录和文件添加点击事件
+                        document.querySelectorAll('#fileList tr').forEach(row => {
+                            row.addEventListener('click', () => {
+                                const pathElement = row.querySelector('td:last-child');
+                                const itemNameElement = row.querySelector('td:first-child span');
+                                const itemType = row.querySelector('td:nth-child(2)').textContent.trim();
+                                
+                                if (pathElement && itemNameElement) {
+                                    const itemFullPath = pathElement.textContent.trim();
+                                    const itemName = itemNameElement.textContent.trim();
+                                    
+                                    if (itemType === '目录') {
+                                        // 进入子目录
+                                        fullPath = itemFullPath;
+                                        currentPath = `${fullPath}/`;
+                                        updatePathDisplay();
+                                        loadFileList();
+                                    } else {
+                                        // 选择文件，自动填充到读取文件路径
+                                        readFilePathInput.value = itemFullPath;
+                                        // 高亮显示
+                                        document.querySelectorAll('#fileList tr').forEach(r => 
+                                            r.classList.remove('bg-blue-50'));
+                                        row.classList.add('bg-blue-50');
+                                    }
+                                }
+                            });
+                        });
+                    } else {
+                        fileList.innerHTML = '<div class="p-4 text-gray-500 text-center">该目录下没有文件或目录</div>';
+                    }
+                } else {
+                    const error = await response.json();
+                    fileList.innerHTML = `<div class="p-4 text-red-500 text-center">加载失败: ${error.message}</div>`;
+                    showResult(`错误: ${JSON.stringify(error, null, 2)}`, true);
+                }
+            } catch (error) {
+                fileList.innerHTML = `<div class="p-4 text-red-500 text-center">加载失败: ${error.message}</div>`;
+                showResult(`错误: ${error.message}`, true);
+            }
+        }
+
+        // 格式化文件大小
+        function formatFileSize(bytes) {
+            if (bytes < 1024) return `${bytes} B`;
+            if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+            return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+        }
+
+        // 获取文件列表按钮
+        listFilesBtn.addEventListener('click', () => {
+            // 重置到根目录
+            currentPath = '';
+            fullPath = '';
+            updatePathDisplay();
+            loadFileList();
+        });
+
+        // 刷新文件列表
+        refreshFilesBtn.addEventListener('click', loadFileList);
+
+        // 读取文件内容
+        readFileBtn.addEventListener('click', async () => {
+            const config = validateConfig();
+            if (!config) return;
+
+            let filePath = readFilePathInput.value.trim();
+            if (!filePath) {
+                showResult('请输入文件路径或从文件列表中选择一个文件', true);
+                return;
+            }
+            
+            // 清理路径
+            filePath = cleanPath(filePath);
+            
+            try {
+                showResult('<i class="fa fa-spinner fa-spin"></i> 读取中...');
+                
+                const response = await fetch(
+                    `https://api.github.com/repos/${config.owner}/${config.repo}/contents/${filePath}`,
+                    {
+                        headers: {
+                            'Authorization': `token ${config.token}`,
+                            'Accept': 'application/vnd.github.v3+json'
+                        }
+                    }
+                );
+
+                if (response.ok) {
+                    const fileData = await response.json();
+                    // 解码base64内容
+                    const content = atob(fileData.content.replace(/\n/g, ''));
+                    fileContentTextarea.value = content;
+                    // 自动填充写入路径，使用清理后的路径
+                    writeFilePathInput.value = filePath;
+                    
+                    // 安全处理文件数据
+                    const updateTime = fileData.updated_at ? new Date(fileData.updated_at).toLocaleString() : '未知';
+                    showResult(`成功读取文件: ${filePath}
+SHA: ${fileData.sha || '未知'}
+大小: ${formatFileSize(fileData.size || 0)}
+最后修改: ${updateTime}`);
+                } else {
+                    const error = await response.json();
+                    showResult(`错误: ${JSON.stringify(error, null, 2)}`, true);
+                }
+            } catch (error) {
+                showResult(`错误: ${error.message}`, true);
+            }
+        });
+
+        // 写入文件内容
+        writeFileBtn.addEventListener('click', async () => {
+            const config = validateConfig();
+            if (!config) return;
+
+            let filePath = writeFilePathInput.value.trim();
+            const content = fileContentTextarea.value;
+            
+            if (!filePath) {
+                showResult('请输入文件路径', true);
+                return;
+            }
+
+            // 清理路径
+            filePath = cleanPath(filePath);
+            
+            try {
+                showResult('<i class="fa fa-spinner fa-spin"></i> 保存中...');
+                
+                // 先尝试获取文件的SHA（用于更新现有文件）
+                let sha = null;
+                try {
+                    const getResponse = await fetch(
+                        `https://api.github.com/repos/${config.owner}/${config.repo}/contents/${filePath}`,
+                        {
+                            headers: {
+                                'Authorization': `token ${config.token}`,
+                                'Accept': 'application/vnd.github.v3+json'
+                            }
+                        }
+                    );
+
+                    if (getResponse.ok) {
+                        const fileData = await getResponse.json();
+                        sha = fileData.sha; // 存在该文件，获取SHA用于更新
+                    }
+                } catch (getError) {
+                    // 获取SHA失败不影响写入，可能是新文件
+                    console.log('获取文件SHA失败（可能是新文件）:', getError);
+                }
+
+                // 编码内容为base64
+                const base64Content = btoa(unescape(encodeURIComponent(content)));
+                
+                // 提交写入请求
+                const response = await fetch(
+                    `https://api.github.com/repos/${config.owner}/${config.repo}/contents/${filePath}`,
+                    {
+                        method: 'PUT',
+                        headers: {
+                            'Authorization': `token ${config.token}`,
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/vnd.github.v3+json'
+                        },
+                        body: JSON.stringify({
+                            message: `Update ${filePath} via API`, // 提交信息
+                            content: base64Content, // base64编码的内容
+                            sha: sha // 如果是更新文件，需要提供原文件的SHA
+                        })
+                    }
+                );
+
+                if (response.ok) {
+                    const result = await response.json();
+                    
+                    // 安全处理响应数据，防止属性不存在导致的错误
+                    const commitHash = result.commit?.sha || '未知';
+                    const fileUrl = result.content?.html_url || '未知';
+                    const updateTime = result.commit?.commit?.committer?.date 
+                        ? new Date(result.commit.commit.committer.date).toLocaleString()
+                        : new Date().toLocaleString();
+                    
+                    showResult(`成功写入文件: ${filePath}
+提交哈希: ${commitHash}
+文件URL: ${fileUrl}
+更新时间: ${updateTime}`);
+                    
+                    // 刷新当前目录的文件列表
+                    loadFileList();
+                } else {
+                    const error = await response.json();
+                    showResult(`错误: ${JSON.stringify(error, null, 2)}`, true);
+                }
+            } catch (error) {
+                showResult(`错误: ${error.message}`, true);
+            }
+        });
+    </script>
+</body>
+</html>
